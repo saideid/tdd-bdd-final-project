@@ -167,6 +167,88 @@ class TestProductRoutes(TestCase):
     # ADD YOUR TEST CASES HERE
     #
 
+    def test_invalid_method(self):
+        """You cannot use DELETE method on /products endpoint"""
+        resp = self.client.delete(f"{BASE_URL}")
+        self.assertEqual(resp.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_get_product(self):
+        """It should be able to get product by id"""
+        test_product = self._create_products()[0]
+        response = self.client.get(f"{BASE_URL}/{test_product.id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pdata = response.get_json()
+        self.assertEqual(pdata["name"], test_product.name)
+        self.assertEqual(pdata["category"], test_product.category.name)
+        self.assertEqual(pdata["available"], test_product.available)
+
+    def test_product_not_found(self):
+        """It should return 404 error for operating with non-existing product"""
+        res = self.client.get(f"{BASE_URL}/0")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        product = ProductFactory()
+        res = self.client.put(f"{BASE_URL}/0", json=product.serialize())
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        res = self.client.delete(f"{BASE_URL}/0")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_update_product(self):
+        """It should Update an existing Product"""
+        test_product = ProductFactory()
+        resp = self.client.post(BASE_URL, json=test_product.serialize())
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        product = resp.get_json()
+        product["description"] = "bla?"
+        resp = self.client.put(f"{BASE_URL}/{product['id']}", json=product)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["description"], "bla?")
+
+    def test_delete_product(self):
+        """It should Delete a product"""
+        products = self._create_products(5)
+        num = self.get_product_count()
+        self.assertEqual(num, 5)
+        to_delete = products[0].id
+        res = self.client.delete(f"{BASE_URL}/{to_delete}")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertIsNone(res.get_json())
+        res = self.client.get(f"{BASE_URL}/{to_delete}")
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        num = self.get_product_count()
+        self.assertEqual(num, 4)
+
+    def test_list_all(self):
+        """It should list all products"""
+        self._create_products(5)
+        self.assertEqual(self.get_product_count(), 5)
+
+    def test_list_by_name(self):
+        """It should list products by name"""
+        products = self._create_products(20)
+        test_name = products[0].name
+        test_count = len([p for p in products if p.name == test_name])
+        resp = self.client.get(BASE_URL, query_string=f"name={quote_plus(test_name)}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.get_json()), test_count)
+
+    def test_list_by_category(self):
+        """It should list products by category"""
+        products = self._create_products(20)
+        test_category = products[0].category
+        test_count = len([p for p in products if p.category == test_category])
+        resp = self.client.get(BASE_URL, query_string=f"category={quote_plus(test_category.name)}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.get_json()), test_count)
+
+    def test_list_by_availability(self):
+        """It should list products by availability"""
+        products = self._create_products(20)
+        test_count = len([p for p in products if p.available])
+        resp = self.client.get(BASE_URL, query_string="available=true")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.get_json()), test_count)
+
     ######################################################################
     # Utility functions
     ######################################################################
